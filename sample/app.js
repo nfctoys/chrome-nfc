@@ -31,7 +31,7 @@ function handleDeviceTimeout(func, args) {
   var hasTags = false;
   setTimeout(function() {
     if (!hasTags) {
-      log('Timeout! No tag detected');
+      //log('Timeout! No tag detected');
     }
   }, timeoutInMs);
   var args = args || [];

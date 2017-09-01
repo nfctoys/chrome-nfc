@@ -1,3 +1,13 @@
+This is an unsupported fork of the Chrome App NFC Library.
+
+This fork strips out NDEF parsing from `tt2.js` and instead dumps a token's full contents in hexadecimal to the console.
+
+<img src="https://raw.github.com/vitorio/chrome-nfc/master/sample/screenshots/tt2hexdump.png"/>
+
+Tested with an SCL3711, running under [NW.js](https://nwjs.io), v0.23.7 on Mac 10.11, v0.22.3 on Windows 10 (using [Zadig](http://zadig.akeo.ie)).
+
+---
+
 # Chrome App NFC Library
 
 With this simple library, you can build a [Chrome App](https://developer.chrome.com/apps) that communicates over USB with NFC Readers.

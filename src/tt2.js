@@ -65,118 +65,41 @@ TT2.prototype.read = function(device, cb) {
     var card = new Uint8Array(b0_b3);
     var data = new Uint8Array(b0_b3);
     var data_size = data[14] * 8;  // CC2: unit is 8 bytes.
-    var CC0 = data[12];            // CC0: 0xE1 = NDEF
-    var CC1 = data[13];            // CC1: version of this Type 2 tag spec.
-    var CC3 = data[15];            // CC3: b7-b4: read permission.
+    var block = 4;  // data starts from block 4
+    var writable_blocks = [4, 8, 12, 32, 36, 40, 44, 48, 52, 56, 60, 64, 68, 72, 76, 80, 84, 88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128]
+    var writable_data = new Uint8Array();
 
-    function check_ver(cc1) {
-      var major = (cc1 & 0xf0 ) >> 4;
-      var minor = cc1 & 0x0f;
-      if (major == 0x1) return true;
-      return false;
-    }
-    function readable(cc3) {
-      return (cc3 & 0xf0) == 0x00 ? true : false;
-    }
-
-    /* TODO: support protocol other than NDEF */
-    if (CC0 != 0xE1 || !check_ver(CC1) || !readable(CC3)) {
-      console.log("UNsupported type 2 tag: CC0=" + CC0 +
-                                        ", CC1=" + CC1 +
-                                        ", CC3=" + CC3);
-      return callback(0x0777, data.buffer);
-    }
+    log('pages 0-3', UTIL_BytesToHex(data));
 
     // poll data out
     var poll_n = Math.floor((data_size + 15) / 16);
-    var block = 4;  // data starts from block 4
 
     function poll_block(card, block, poll_n) {
       console.log("[DEBUG] poll_n: " + poll_n);
       if (--poll_n < 0) {
         defaultCallback("[DEBUG] got a type 2 tag:", card.buffer);
-
-        /* TODO: call tlv.js instead */
-        /* TODO: now pass NDEF only. Support non-NDEF in the future. */
-        for (var i = 0x10; i < card.length;) {
-          switch (card[i]) {
-          case 0x00:  /* NULL */
-            console.debug("NULL TLV");
-            i++;
-            break;
-
-          case 0x01:  /* Lock Control TLV */
-            console.debug("Found Lock Control TLV");
-
-            /* TODO: refactor and share code with Memory Control TLV */
-            var PageAddr = card[i + 2] >> 4;
-            var ByteOffset = card[i + 2] & 0xf;
-            var Size = card[i + 3];
-            if (Size == 0) Size = 256;  /* 256 bits */
-            var BytesPerPage = Math.pow(2, card[i + 4] & 0xf);
-            var BytesLockedPerLockBit = card[i + 4] >> 4;
-
-            console.debug("Lock control: " +
-                "BytesLockedPerLockBit=" + BytesLockedPerLockBit +
-                ", Size=" + Size);
-
-            var ByteAddr = PageAddr * BytesPerPage + ByteOffset;
-
-            console.info("Lock control: ByteAddr=" + ByteAddr);
-            console.info("  Locked bytes:");
-            var lock_offset = 64;
-            for (var j = 0; j < (Size + 7) / 8; j++) {
-              var k = ByteAddr + j;
-
-              if (k >= card.length) {
-                console.warn("  card[" + k + "] haven't read out yet.");
-                /* TODO: read out and continue the following parse */
-                break;
-              }
-
-              var mask = card[k];
-              console.debug("  [" + k + "]: " + mask.toString(16));
-
-              if (mask & 1) console.debug("* block-locking");
-              for (var l = 1; l < 8; l++) {
-                if (j * 8 + l >= Size) continue;
-
-                for (var s = "", m = 0;
-                     m < BytesLockedPerLockBit;
-                     lock_offset++) {
-                  s += "0x" + lock_offset.toString(16) + ", ";
-                }
-                if (mask & (1 << l)) console.info("    " + s);
-              }
-            }
-
-            i += (1/*T*/ + 1/*L*/ + card[i + 1]/*len: 3*/);
-            break;
-
-          /* TODO: 0x02 -- Memory Control TLV */
-
-          case 0xFE:  /* Terminator */
-            console.debug("Terminator TLV.");
-            return;
-
-          case 0x03: /* NDEF */
-            var len = card[i + 1];
-            if ((i + 2 + len) > card.length) {
-              console.warn("TLV len " + len + " > card len " + card.length);
-            }
-            return callback(0,
-                new Uint8Array(card.subarray(i + 2, i + 2 + len)).buffer);
-
-          default:
-            console.error("Unknown Type [" + card[i] + "]");
-            return;
-          }
-        }  /* end of for */
       }
 
       device.read_block(block, function(rc, bn) {
         if (rc) return callback(rc);
-        card = UTIL_concat(card, new Uint8Array(bn));
+        var newbn = new Uint8Array(bn)
+        card = UTIL_concat(card, newbn);
+        log('pages ' + block + '-' + (block+3), UTIL_BytesToHex(newbn));
+        if (writable_blocks.indexOf(block) > -1) {
+          if (block == 12) {
+            writable_data = UTIL_concat(writable_data, newbn.subarray(0,4));
+          } else if (block == 128) {
+            writable_data = UTIL_concat(writable_data, newbn.subarray(0,8));
+          } else {
+            writable_data = UTIL_concat(writable_data, newbn);
+          };
+        };
+        if (block == 132) {
+          log('writable_data length', writable_data.length);
+          var d = new TextDecoder('utf-8');
+          var str = d.decode(writable_data);
+          log('writable_data', str)
+        };
         return poll_block(card, block + 4, poll_n);
       });
     }

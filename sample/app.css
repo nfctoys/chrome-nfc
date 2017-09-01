@@ -43,7 +43,7 @@ pre {
 }
 
 #logContainer {
-  height: 200px;
+  height: 360px;
   width: 100%;
   position: fixed;
   bottom: 0;
@@ -53,7 +53,7 @@ pre {
 
 .logs {
   overflow-y: auto;
-  height: 190px;
+  height: 350px;
 }
 
 .logs pre {
